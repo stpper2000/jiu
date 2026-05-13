@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>記帳 App (顯示強化版)</title>
+<title>記帳 App (終極修復版)</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -340,15 +340,18 @@ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
 }
 function pad(n) { return String(n).padStart(2,'0'); }
 
-// 強化版日期正規化：確保 2024/5/1 與 2024/05/01 都能對上
+// 全能日期解析器：將 ISO, 台灣格式, Google 時間物件全部統一為 yyyy/m/d
 function normalizeDate(dateStr) {
   if (!dateStr) return '';
-  // 將所有 - 或 . 轉為 /
-  let clean = dateStr.replace(/-/g, '/').replace(/\./g, '/');
-  let parts = clean.split('/');
-  if (parts.length !== 3) return dateStr;
-  // 確保 yyyy/m/d 格式 (不補零，這是 App 顯示用的標準)
-  return `${parts[0]}/${parseInt(parts[1])}/${parseInt(parts[2])}`;
+  try {
+    const d = new Date(dateStr);
+    // 檢查是否為無效日期
+    if (isNaN(d.getTime())) return dateStr;
+    // 強制轉換為台灣本地日期格式 (yyyy/m/d)
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  } catch (e) {
+    return dateStr;
+  }
 }
 
 function isoToDisplay(iso) {
@@ -408,21 +411,18 @@ setSyncStatus('syncing', '正在下載...');
 const callbackName = 'jsonp_callback_' + Math.floor(Math.random() * 1000000);
 window[callbackName] = function(cloudRecords) {
 if (cloudRecords && Array.isArray(cloudRecords)) {
-const oldLen = records.length;
 records = mergeRecords(records, cloudRecords);
 isCloudLoaded = true;
 
-// 診斷日誌：列出抓到的日期
 const dates = [...new Set(records.map(r => r.date))];
 log(`同步成功！總筆數: ${records.length}，日期包含: ${dates.join(', ')}`);
 
 localStorage.setItem('bk_records', JSON.stringify(records));
 
-// 強制重新渲染所有分頁
+// 強制刷新介面
 updateHeader();
 renderHistory();
 renderMonthly();
-if (document.getElementById('tab-products').classList.contains('active')) renderProductSections();
 
 setSyncStatus('success', '雲端同步中');
 showToast("✓ 雲端資料已同步");
@@ -620,7 +620,7 @@ return `<div class="record-item">
 <div class="record-icon" style="background:${cat.bg}">${cat.icon}</div>
 <div class="record-info">
 <div class="record-name">${r.name}</div>
-<div class="record-meta">${r.date} · ${cat.label} · x${r.qty}${r.note?' · '+r.note:''}</div>
+<div class="record-meta">${normalizeDate(r.date)} · ${cat.label} · x${r.qty}${r.note?' · '+r.note:''}</div>
 </div>
 <div class="record-amount">
 <div class="record-val" style="color:${r.type==='income'?'#16a34a':'#ef4444'}">${r.type==='income'?'+':'-'}${formatMoney(r.total)}</div>
@@ -666,7 +666,7 @@ document.getElementById('monthLabel').textContent = `${y} 年 ${m} 月`;
 const nowStr = new Date().getFullYear() + '-' + pad(new Date().getMonth()+1);
 document.getElementById('monthNextBtn').className = monthStr >= nowStr ? 'month-arrow disabled' : 'month-arrow';
 
-const monthRecs = records.filter(r => displayToYearMonth(r.date) === monthStr);
+const monthRecs = records.filter(r => displayToYearMonth(normalizeDate(r.date)) === monthStr);
 const totalIncome = monthRecs.filter(r=>r.type==='income').reduce((a,b)=>a+b.total,0);
 const totalExpense = monthRecs.filter(r=>r.type==='expense').reduce((a,b)=>a+b.total,0);
 const totalDaily = monthRecs.filter(r=>r.type==='daily').reduce((a,b)=>a+b.total,0);
