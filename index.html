@@ -138,16 +138,6 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 .month-day-bar-item { font-size: 11px; color: #94a3b8; }
 .month-empty { text-align: center; color: #94a3b8; padding: 40px; }
 
-.export-card { background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 14px; }
-.export-title { font-weight: 900; font-size: 15px; color: #0f172a; margin-bottom: 6px; }
-.export-desc { font-size: 13px; color: #64748b; line-height: 1.6; }
-.export-stat { margin-top: 10px; font-size: 13px; color: #374151; font-weight: 700; background: #f8fafc; border-radius: 8px; padding: 8px 12px; }
-.export-btn { width: 100%; padding: 13px; border-radius: 12px; border: none; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; margin-bottom: 8px; }
-.export-btn-green { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; box-shadow: 0 4px 14px #22c55e44; }
-.export-btn-blue { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; box-shadow: 0 4px 14px #3b82f644; }
-.export-btn-slate { background: #f1f5f9; color: #374151; border: 1.5px solid #e2e8f0; }
-.export-btn-red { background: #fff; color: #ef4444; border: 1.5px solid #ef4444; }
-
 #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 24px; border-radius: 100px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 999; white-space: nowrap; display: none; }
 </style>
 </head>
@@ -308,8 +298,8 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 <div id="toast"></div>
 
 <script>
-// API 設定
-const API_URL = "https://script.google.com/macros/s/AKfycbz5KNHUNW7XNcjt0EW2lVJozuJKsKqlwMEOD5qxNtvrZtUORW8n0rQn6MC0n567akQHFg/exec";
+// API 設定 (已更新為您提供的新網址)
+const API_URL = "https://script.google.com/macros/s/AKfycby5gZUF-K2QMXq7r5RP2W3onCNp-yCR1nesACY9kjguQFMKkHQsCdLcouDUjpLM01VsMA/exec";
 
 const CATS = {
 income: { label: '銷售收入', color: '#22c55e', bg: '#dcfce7', icon: '↑' },
@@ -349,19 +339,20 @@ t.textContent = msg; t.style.display = 'block';
 setTimeout(() => t.style.display = 'none', 2000);
 }
 
-// 加入上傳雲端函式
+// 加入上傳雲端函式 (已修正 CORS 與 Content-Type 問題)
 async function uploadToCloud() {
 try {
 const payload = {
 records: records,
 products: products
 };
+// 改用 text/plain 避免觸發 GAS 的 CORS 限制，並移除 no-cors
 await fetch(API_URL, {
 method: "POST",
-mode: "no-cors", // Google Script 通常需要 no-cors 或正確的 CORS 設定
-headers: { "Content-Type": "application/json" },
+headers: { "Content-Type": "text/plain;charset=utf-8" },
 body: JSON.stringify(payload)
 });
+console.log("Cloud sync requested");
 } catch (e) {
 console.error("Cloud sync failed", e);
 }
@@ -678,4 +669,3 @@ init();
 </script>
 </body>
 </html>
-
