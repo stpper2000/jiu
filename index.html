@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>記帳 App (終極修復版)</title>
+<title>我的記帳 App</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -15,7 +15,21 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 .status-success { background: #22c55e; }
 .status-error { background: #ef4444; }
 
-#debugLog { background: #000; color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; margin: 10px; border-radius: 8px; max-height: 150px; overflow-y: auto; line-height: 1.4; border: 1px solid #333; }
+/* 偵錯視窗預設隱藏 */
+#debugLog { 
+  display: none; 
+  background: #000; 
+  color: #0f0; 
+  font-family: monospace; 
+  font-size: 10px; 
+  padding: 10px; 
+  margin: 10px; 
+  border-radius: 8px; 
+  max-height: 150px; 
+  overflow-y: auto; 
+  line-height: 1.4; 
+  border: 1px solid #333; 
+}
 
 .header { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important; padding: 16px 20px 16px; }
 .header-date-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -27,7 +41,7 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 .hdr-date-input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 .hdr-today-badge { display: inline-block; background: rgba(255,255,255,0.15); color: #94a3b8; font-size: 10px; border-radius: 4px; padding: 2px 8px; margin-top: 4px; cursor: pointer; border: none; font-family: inherit; }
 .hdr-net-row { text-align: center; margin-bottom: 12px; }
-.hdr-net-label { color: #94a3b8; font-size: 11px; margin-bottom: 2px; }
+.hdr-net-label { color: #94a3b8; font-size: 11px; margin-bottom: 2px; cursor: pointer; } /* 點擊此標籤可開啟偵錯 */
 .hdr-net-val { font-size: 30px; font-weight: 900; }
 .summary-bar { display: flex; gap: 6px; }
 .summary-item { flex: 1; background: rgba(255,255,255,0.07); border-radius: 10px; padding: 7px 8px; }
@@ -162,7 +176,8 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 <button class="hdr-arrow disabled" id="hdrNextBtn" onclick="shiftDate(1)">›</button>
 </div>
 <div class="hdr-net-row">
-<div class="hdr-net-label">當日盈餘</div>
+<!-- 點擊下方文字可顯示偵錯視窗 -->
+<div class="hdr-net-label" onclick="document.getElementById('debugLog').style.display='block'">當日盈餘</div>
 <div class="hdr-net-val" id="headerNet"></div>
 </div>
 <div class="summary-bar">
@@ -340,14 +355,12 @@ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
 }
 function pad(n) { return String(n).padStart(2,'0'); }
 
-// 全能日期解析器：將 ISO, 台灣格式, Google 時間物件全部統一為 yyyy/m/d
+// 全能日期解析器
 function normalizeDate(dateStr) {
   if (!dateStr) return '';
   try {
     const d = new Date(dateStr);
-    // 檢查是否為無效日期
     if (isNaN(d.getTime())) return dateStr;
-    // 強制轉換為台灣本地日期格式 (yyyy/m/d)
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
   } catch (e) {
     return dateStr;
@@ -419,7 +432,6 @@ log(`同步成功！總筆數: ${records.length}，日期包含: ${dates.join(',
 
 localStorage.setItem('bk_records', JSON.stringify(records));
 
-// 強制刷新介面
 updateHeader();
 renderHistory();
 renderMonthly();
