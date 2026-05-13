@@ -3,14 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>記帳 App (診斷版)</title>
+<title>記帳 App</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height: 100vh; }
 #app { max-width: 480px; margin: 0 auto; position: relative; min-height: 100vh; }
 
-/* 診斷狀態標籤 */
 #syncStatus { position: fixed; top: 10px; right: 10px; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; color: white; z-index: 9999; }
 .status-syncing { background: #3b82f6; }
 .status-success { background: #22c55e; }
@@ -349,6 +348,7 @@ setTimeout(() => t.style.display = 'none', 2000);
 
 function setSyncStatus(status, text) {
 const el = document.getElementById('syncStatus');
+if (!el) return;
 el.className = 'status-' + status;
 el.textContent = text;
 }
@@ -374,35 +374,37 @@ setSyncStatus('error', '上傳失敗');
 }
 }
 
-// 雲端同步：下載資料 (防快取版 + 診斷)
-async function loadFromCloud() {
-try {
+// 雲端同步：下載資料 (JSONP 模式 - 徹底解決 CORS 問題)
+function loadFromCloud() {
+console.log("正在透過 JSONP 同步雲端資料...");
 setSyncStatus('syncing', '正在下載...');
-console.log("正在同步雲端資料...");
-const response = await fetch(API_URL + "?t=" + Date.now());
 
-if (!response.ok) {
-throw new Error("伺服器回應錯誤: " + response.status);
-}
-
-const cloudRecords = await response.json();
-
+const callbackName = 'jsonp_callback_' + Math.floor(Math.random() * 1000000);
+window[callbackName] = function(cloudRecords) {
 if (cloudRecords && Array.isArray(cloudRecords)) {
 records = cloudRecords;
 localStorage.setItem('bk_records', JSON.stringify(records));
 updateHeader();
 renderHistory();
 if (document.getElementById('tab-monthly').classList.contains('active')) renderMonthly();
-console.log("雲端同步成功");
+console.log("JSONP 同步成功");
 setSyncStatus('success', '雲端同步中');
 showToast("✓ 資料已更新");
 }
-} catch (e) {
-console.error("雲端同步失敗", e);
+delete window[callbackName];
+const script = document.getElementById(callbackName);
+if (script) script.remove();
+};
+
+const script = document.createElement('script');
+script.id = callbackName;
+script.src = `${API_URL}?callback=${callbackName}&t=${Date.now()}`;
+script.onerror = function() {
+console.error("JSONP 請求失敗");
 setSyncStatus('error', '同步失敗');
-// 手機偵錯彈窗：如果是連線問題會在這裡顯示
-// alert("同步失敗原因: " + e.message + "\n請確認 API 網址是否正確且權限已開。");
-}
+delete window[callbackName];
+};
+document.body.appendChild(script);
 }
 
 function saveData() {
