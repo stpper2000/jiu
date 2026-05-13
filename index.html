@@ -298,7 +298,7 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 <div id="toast"></div>
 
 <script>
-// API 設定 (已更新為您提供的新網址)
+// API 設定 (請確保這是您最新部署的 /exec 網址)
 const API_URL = "https://script.google.com/macros/s/AKfycby5gZUF-K2QMXq7r5RP2W3onCNp-yCR1nesACY9kjguQFMKkHQsCdLcouDUjpLM01VsMA/exec";
 
 const CATS = {
@@ -339,35 +339,49 @@ t.textContent = msg; t.style.display = 'block';
 setTimeout(() => t.style.display = 'none', 2000);
 }
 
-// 加入上傳雲端函式 (已修正 CORS 與 Content-Type 問題)
+// 雲端同步：上傳資料 (使用相容模式避開 CORS)
 async function uploadToCloud() {
-  try {
-    const payload = {
-      records: records,
-      products: products
-    };
-    
-    // 使用 URLSearchParams 封裝資料，這會自動將 Content-Type 設為 application/x-www-form-urlencoded
-    const formData = new URLSearchParams();
-    formData.append('json', JSON.stringify(payload));
+try {
+const payload = { records: records, products: products };
+const formData = new URLSearchParams();
+formData.append('json', JSON.stringify(payload));
 
-    await fetch(API_URL, {
-      method: "POST",
-      mode: "no-cors", // 在這種格式下，no-cors 是安全的且能繞過 CORS 檢查
-      body: formData
-    });
-    
-    console.log("資料已送出（使用相容模式）");
-  } catch (e) {
-    console.error("同步失敗", e);
-  }
+await fetch(API_URL, {
+method: "POST",
+mode: "no-cors",
+body: formData
+});
+console.log("Cloud sync requested (Compatibility Mode)");
+} catch (e) {
+console.error("Cloud sync failed", e);
+}
+}
+
+// 雲端同步：下載資料 (雙向同步)
+async function loadFromCloud() {
+try {
+console.log("正在從雲端同步資料...");
+const response = await fetch(API_URL);
+const cloudRecords = await response.json();
+
+if (cloudRecords && Array.isArray(cloudRecords)) {
+records = cloudRecords;
+localStorage.setItem('bk_records', JSON.stringify(records));
+updateHeader();
+renderHistory();
+if (document.getElementById('tab-monthly').classList.contains('active')) renderMonthly();
+console.log("雲端資料同步成功");
+}
+} catch (e) {
+console.error("雲端同步失敗", e);
+}
 }
 
 function saveData() {
 try {
 localStorage.setItem('bk_records', JSON.stringify(records));
 localStorage.setItem('bk_products', JSON.stringify(products));
-uploadToCloud(); // 儲存時同步上傳
+uploadToCloud(); 
 } catch(e) {}
 }
 function loadData() {
@@ -666,9 +680,14 @@ ${products[type].map(p=>`
 }
 
 function init() {
-loadData(); initMonthStr();
+loadData(); 
+initMonthStr();
 setDate(todayISO());
-renderProductGrid(); updateAddBtn();
+renderProductGrid(); 
+updateAddBtn();
+
+// 啟動後自動從雲端載入資料，實現多裝置同步
+loadFromCloud();
 }
 init();
 </script>
