@@ -15,7 +15,6 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 .status-success { background: #22c55e; }
 .status-error { background: #ef4444; }
 
-/* 偵錯視窗預設隱藏 */
 #debugLog { 
   display: none; 
   background: #000; 
@@ -363,7 +362,6 @@ function pad(n) {
   return String(n).padStart(2,'0'); 
 }
 
-// 全能日期解析器
 function normalizeDate(dateStr) {
   if (!dateStr) return '';
   try {
@@ -455,16 +453,25 @@ function loadFromCloud() {
 
   const callbackName = 'jsonp_callback_' + Math.floor(Math.random() * 1000000);
   
-  window[callbackName] = function(cloudRecords) {
+  window[callbackName] = function(cloudData) {
     try {
-      if (cloudRecords && Array.isArray(cloudRecords)) {
-        records = mergeRecords(records, cloudRecords);
+      // 處理 records
+      if (cloudData && cloudData.records && Array.isArray(cloudData.records)) {
+        records = mergeRecords(records, cloudData.records);
         const dates = [...new Set(records.map(r => r.date))];
-        log(`✓ 帳目同步成功！總筆數: ${records.length}，日期包含: ${dates.join(', ')}`);
+        log(`✓ 帳目同步成功！總筆數: ${records.length}`);
         localStorage.setItem('bk_records', JSON.stringify(records));
       }
+      
+      // 處理 products 🆕
+      if (cloudData && cloudData.products && typeof cloudData.products === 'object') {
+        products = cloudData.products;
+        const prodCount = Object.values(products).flat().length;
+        log(`✓ 品項同步成功！總數: ${prodCount}`);
+        localStorage.setItem('bk_products', JSON.stringify(products));
+      }
     } catch (e) {
-      log('✗ 處理帳目失敗：' + e.toString());
+      log('✗ 處理資料失敗：' + e.toString());
     }
     
     // 清理回調
@@ -476,7 +483,8 @@ function loadFromCloud() {
     updateHeader();
     renderHistory();
     renderMonthly();
-    renderProductGrid();
+    renderProductGrid(); // 重新渲染品項
+    renderProductSections();
     
     setSyncStatus('success', '雲端已同步');
     showToast("✓ 雲端資料已同步");
@@ -490,35 +498,9 @@ function loadFromCloud() {
     log("✗ 雲端連線失敗");
     setSyncStatus('error', '同步失敗');
     delete window[callbackName];
-    isCloudLoaded = true; // 即使失敗也標記為已嘗試
+    isCloudLoaded = true;
   };
   document.body.appendChild(script);
-}
-
-// 📝 **同步 products 到雲端**
-function syncProductsToCloud() {
-  if (!isCloudLoaded) {
-    log('⚠️ 跳過同步 - 雲端未完全載入');
-    return;
-  }
-  try {
-    const payload = { 
-      records: records, 
-      products: products 
-    };
-    const formData = new URLSearchParams();
-    formData.append('json', JSON.stringify(payload));
-    
-    fetch(API_URL, { 
-      method: "POST", 
-      mode: "no-cors", 
-      body: formData 
-    }).then(() => {
-      log('✓ 品項同步到雲端');
-    });
-  } catch (e) {
-    log('✗ 品項同步失敗：' + e.toString());
-  }
 }
 
 function saveData() {
@@ -925,7 +907,7 @@ function goToDay(dateLabel) {
 }
 
 // ============================================
-// 📦 品項管理 (重要修正)
+// 📦 品項管理
 // ============================================
 
 function setProdType(type) {
@@ -946,8 +928,7 @@ function addProduct() {
   document.getElementById('newProdName').value='';
   renderProductSections(); 
   renderProductGrid(); 
-  saveData(); // 同時存本地和雲端
-  syncProductsToCloud(); // 明確同步 products
+  saveData();
   log('✓ 新增品項：' + name);
   showToast('✓ 已新增品項');
 }
@@ -957,8 +938,7 @@ function deleteProduct(type, id) {
   products[type] = products[type].filter(p=>p.id!==id);
   renderProductSections(); 
   renderProductGrid(); 
-  saveData(); // 同時存本地和雲端
-  syncProductsToCloud(); // 明確同步 products
+  saveData();
   log('✓ 刪除品項：' + prodName);
 }
 
@@ -983,16 +963,15 @@ ${products[type].map(p=>`
 
 function init() {
   log("系統啟動中...");
-  loadData(); // 先讀本地
+  loadData();
   initMonthStr();
   setDate(todayISO());
-  renderProductGrid(); 
+  renderProductGrid();
   updateAddBtn();
-  loadFromCloud(); // 再從雲端拉取完整資料（包括 products 從 Sheet1 反推）
+  loadFromCloud();
   log("✓ 初始化完成");
 }
 
-// 頁面載入時執行
 init();
 </script>
 </body>
