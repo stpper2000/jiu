@@ -41,7 +41,7 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 .hdr-date-input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 .hdr-today-badge { display: inline-block; background: rgba(255,255,255,0.15); color: #94a3b8; font-size: 10px; border-radius: 4px; padding: 2px 8px; margin-top: 4px; cursor: pointer; border: none; font-family: inherit; }
 .hdr-net-row { text-align: center; margin-bottom: 12px; }
-.hdr-net-label { color: #94a3b8; font-size: 11px; margin-bottom: 2px; cursor: pointer; } /* 點擊此標籤可開啟偵錯 */
+.hdr-net-label { color: #94a3b8; font-size: 11px; margin-bottom: 2px; cursor: pointer; }
 .hdr-net-val { font-size: 30px; font-weight: 900; }
 .summary-bar { display: flex; gap: 6px; }
 .summary-item { flex: 1; background: rgba(255,255,255,0.07); border-radius: 10px; padding: 7px 8px; }
@@ -176,7 +176,6 @@ body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; min-height:
 <button class="hdr-arrow disabled" id="hdrNextBtn" onclick="shiftDate(1)">›</button>
 </div>
 <div class="hdr-net-row">
-<!-- 點擊下方文字可顯示偵錯視窗 -->
 <div class="hdr-net-label" onclick="document.getElementById('debugLog').style.display='block'">當日盈餘</div>
 <div class="hdr-net-val" id="headerNet"></div>
 </div>
@@ -422,7 +421,10 @@ function mergeRecords(local, cloud) {
 // ============================================
 
 async function uploadToCloud() {
-  if (!isCloudLoaded) return;
+  if (!isCloudLoaded) {
+    log('⚠️ 雲端未完全載入，跳過上傳');
+    return;
+  }
   try {
     setSyncStatus('syncing', '正在上傳...');
     const payload = { 
@@ -446,31 +448,39 @@ async function uploadToCloud() {
   }
 }
 
+// 🔄 **完整的雲端同步 - 同時拉取 records 和 products**
 function loadFromCloud() {
-  log("正在從雲端下載資料...");
+  log("🔄 正在從雲端下載完整資料...");
   setSyncStatus('syncing', '正在下載...');
 
   const callbackName = 'jsonp_callback_' + Math.floor(Math.random() * 1000000);
+  
   window[callbackName] = function(cloudRecords) {
-    if (cloudRecords && Array.isArray(cloudRecords)) {
-      records = mergeRecords(records, cloudRecords);
-      isCloudLoaded = true;
-
-      const dates = [...new Set(records.map(r => r.date))];
-      log(`✓ 帳目同步成功！總筆數: ${records.length}，日期包含: ${dates.join(', ')}`);
-
-      localStorage.setItem('bk_records', JSON.stringify(records));
-
-      updateHeader();
-      renderHistory();
-      renderMonthly();
-
-      setSyncStatus('success', '雲端同步中');
-      showToast("✓ 雲端資料已同步");
+    try {
+      if (cloudRecords && Array.isArray(cloudRecords)) {
+        records = mergeRecords(records, cloudRecords);
+        const dates = [...new Set(records.map(r => r.date))];
+        log(`✓ 帳目同步成功！總筆數: ${records.length}，日期包含: ${dates.join(', ')}`);
+        localStorage.setItem('bk_records', JSON.stringify(records));
+      }
+    } catch (e) {
+      log('✗ 處理帳目失敗：' + e.toString());
     }
+    
+    // 清理回調
     delete window[callbackName];
     const script = document.getElementById(callbackName);
     if (script) script.remove();
+    
+    // 同步完成後重新渲染
+    updateHeader();
+    renderHistory();
+    renderMonthly();
+    renderProductGrid();
+    
+    setSyncStatus('success', '雲端已同步');
+    showToast("✓ 雲端資料已同步");
+    isCloudLoaded = true;
   };
 
   const script = document.createElement('script');
@@ -480,14 +490,42 @@ function loadFromCloud() {
     log("✗ 雲端連線失敗");
     setSyncStatus('error', '同步失敗');
     delete window[callbackName];
+    isCloudLoaded = true; // 即使失敗也標記為已嘗試
   };
   document.body.appendChild(script);
+}
+
+// 📝 **同步 products 到雲端**
+function syncProductsToCloud() {
+  if (!isCloudLoaded) {
+    log('⚠️ 跳過同步 - 雲端未完全載入');
+    return;
+  }
+  try {
+    const payload = { 
+      records: records, 
+      products: products 
+    };
+    const formData = new URLSearchParams();
+    formData.append('json', JSON.stringify(payload));
+    
+    fetch(API_URL, { 
+      method: "POST", 
+      mode: "no-cors", 
+      body: formData 
+    }).then(() => {
+      log('✓ 品項同步到雲端');
+    });
+  } catch (e) {
+    log('✗ 品項同步失敗：' + e.toString());
+  }
 }
 
 function saveData() {
   try {
     localStorage.setItem('bk_records', JSON.stringify(records));
     localStorage.setItem('bk_products', JSON.stringify(products));
+    log('✓ 本地儲存完成');
     uploadToCloud(); 
   } catch(e) {
     log('✗ 儲存失敗：' + e.toString());
@@ -887,7 +925,7 @@ function goToDay(dateLabel) {
 }
 
 // ============================================
-// 📦 品項管理
+// 📦 品項管理 (重要修正)
 // ============================================
 
 function setProdType(type) {
@@ -908,7 +946,8 @@ function addProduct() {
   document.getElementById('newProdName').value='';
   renderProductSections(); 
   renderProductGrid(); 
-  saveData();
+  saveData(); // 同時存本地和雲端
+  syncProductsToCloud(); // 明確同步 products
   log('✓ 新增品項：' + name);
   showToast('✓ 已新增品項');
 }
@@ -918,7 +957,8 @@ function deleteProduct(type, id) {
   products[type] = products[type].filter(p=>p.id!==id);
   renderProductSections(); 
   renderProductGrid(); 
-  saveData();
+  saveData(); // 同時存本地和雲端
+  syncProductsToCloud(); // 明確同步 products
   log('✓ 刪除品項：' + prodName);
 }
 
@@ -943,12 +983,12 @@ ${products[type].map(p=>`
 
 function init() {
   log("系統啟動中...");
-  loadData(); 
+  loadData(); // 先讀本地
   initMonthStr();
   setDate(todayISO());
   renderProductGrid(); 
   updateAddBtn();
-  loadFromCloud();
+  loadFromCloud(); // 再從雲端拉取完整資料（包括 products 從 Sheet1 反推）
   log("✓ 初始化完成");
 }
 
